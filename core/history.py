@@ -49,7 +49,7 @@ class HistoryStore:
                 folders INTEGER NOT NULL, bytes INTEGER NOT NULL, errors INTEGER NOT NULL,
                 complete_coverage INTEGER NOT NULL DEFAULT 1, metadata TEXT NOT NULL
             )""")
-            # Upgrade databases created by the first native prototype.
+            # Upgrade databases created by earlier native versions.
             columns = {row[1] for row in connection.execute("PRAGMA table_info(scans)")}
             if "complete_coverage" not in columns:
                 connection.execute("ALTER TABLE scans ADD COLUMN complete_coverage INTEGER NOT NULL DEFAULT 1")
@@ -57,9 +57,12 @@ class HistoryStore:
 
     def save(self, result: ScanResult) -> int:
         metadata = json.dumps([{"path": r.path, "name": r.name, "size": r.size, "extension": r.extension, "modified": r.modified} for r in result.files], ensure_ascii=False)
-        complete = int(not result.cancelled and not result.errors and result.mode == "Full Scan")
+        complete = int(not result.cancelled and not result.errors and result.mode == "Full Scan" and not getattr(result, "limit_reached", False))
         with sqlite3.connect(self.path) as connection:
-            cursor = connection.execute("INSERT INTO scans (started_at,target,mode,duration,files,folders,bytes,errors,complete_coverage,metadata) VALUES (?,?,?,?,?,?,?,?,?,?)", (result.started_at, result.target, result.mode, result.duration, len(result.files), result.folders, result.bytes_total, len(result.errors), complete, metadata))
+            cursor = connection.execute(
+                "INSERT INTO scans (started_at,target,mode,duration,files,folders,bytes,errors,complete_coverage,metadata) VALUES (?,?,?,?,?,?,?,?,?,?)",
+                (result.started_at, result.target, result.mode, result.duration, len(result.files), result.folders, result.bytes_total, len(result.errors), complete, metadata),
+            )
             connection.commit()
             return int(cursor.lastrowid)
 
@@ -79,9 +82,19 @@ class HistoryStore:
         before, after = self.get(before_id), self.get(after_id)
         before_root, after_root = str(Path(before.target).resolve()), str(Path(after.target).resolve())
         warnings = []
-        if before_root != after_root: warnings.append("The scans use different roots and are not directly comparable.")
-        if not before.complete_coverage or not after.complete_coverage: warnings.append("One or both scans are incomplete; added/removed results are lower bounds.")
-        old = {record.path: record for record in before.records}; new = {record.path: record for record in after.records}
+        if before_root != after_root:
+            warnings.append("The scans use different roots and are not directly comparable.")
+
+        # Explicitly verify scan mode compatibility
+        if before.mode != after.mode:
+            warnings.append(
+                f"Incompatible scan modes: comparing a {before.mode} with a {after.mode}. Quick Scan is a 100k-file bounded triage sample, while Full Scan is comprehensive; reported deltas do not reflect actual disk changes."
+            )
+        elif not before.complete_coverage or not after.complete_coverage:
+            warnings.append("One or both scans are partial/incomplete (capped or had access errors); reported deltas are lower bounds.")
+
+        old = {record.path: record for record in before.records}
+        new = {record.path: record for record in after.records}
         added = [new[path] for path in sorted(new.keys() - old.keys())]
         removed = [old[path] for path in sorted(old.keys() - new.keys())]
         changed = [(old[path], new[path]) for path in sorted(old.keys() & new.keys()) if old[path].size != new[path].size]
@@ -90,6 +103,7 @@ class HistoryStore:
             parent = str(Path(new_record.path).parent)
             growth[parent] = growth.get(parent, 0) + (new_record.size - old_record.size)
         for record in added:
-            parent = str(Path(record.path).parent); growth[parent] = growth.get(parent, 0) + record.size
+            parent = str(Path(record.path).parent)
+            growth[parent] = growth.get(parent, 0) + record.size
         folder_growth = sorted(((folder, amount) for folder, amount in growth.items() if amount > 0), key=lambda pair: pair[1], reverse=True)
         return ScanComparison(before, after, not warnings, "; ".join(warnings), added, removed, changed, folder_growth)

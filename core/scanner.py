@@ -31,6 +31,27 @@ class ScanResult:
     errors: list[str] = field(default_factory=list)
     bytes_total: int = 0
     cancelled: bool = False
+    limit_reached: bool = False
+
+    @property
+    def is_partial(self) -> bool:
+        return self.mode == "Quick Scan" or self.limit_reached or self.cancelled
+
+    @property
+    def coverage_badge(self) -> str:
+        if self.cancelled:
+            return "CANCELLED"
+        if self.mode == "Quick Scan":
+            return "PARTIAL SCAN"
+        return "FULL SCAN"
+
+    @property
+    def coverage_description(self) -> str:
+        if self.cancelled:
+            return "Scan was cancelled before traversal finished. Results represent an incomplete sample."
+        if self.mode == "Quick Scan":
+            return "Quick Scan is a bounded triage mode capped at 100,000 files. Category breakdown and file totals represent only this indexed sample, not full volume capacity."
+        return f"Comprehensive Full Scan completed across {self.folders:,} folders. All accessible directories were traversed without file caps."
 
     @property
     def largest_files(self) -> list[FileRecord]:
@@ -117,6 +138,7 @@ class Scanner:
                 last_emit = now
             # Quick Scan is intentionally bounded for fast triage; Full Scan has no file cap.
             if mode == "Quick Scan" and len(result.files) >= 100_000:
+                result.limit_reached = True
                 break
         result.cancelled = self.cancel_event.is_set()
         result.duration = time.perf_counter() - started
@@ -178,6 +200,7 @@ class Scanner:
             if remaining == 0 or self.cancel_event.is_set() or limit_reached: break
             time.sleep(0.02)
         if limit_reached:
+            result.limit_reached = True
             while not directories.empty():
                 try: directories.get_nowait(); directories.task_done()
                 except Empty: break
