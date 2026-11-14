@@ -160,4 +160,4 @@ Expected output: `20 passed`
 
 ## 📄 License
 
-This project is licensed under the **MIT License**.
+All rights reserved.
