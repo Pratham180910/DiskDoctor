@@ -47,7 +47,6 @@ NAV = [
     ("Dashboard", "dashboard", "⊞"),
     ("Disk Analyzer", "analyzer", "⌕"),
     ("Large Files", "large", "☰"),
-    ("Duplicates", "duplicates", "⧉"),
     ("Cleanup Center", "cleanup", "✦"),
     ("File Insights", "insights", "📈"),
     ("Scan History", "history", "⏱"),
@@ -166,7 +165,17 @@ class DiskDoctorApp(ctk.CTk):
         mark = ctk.CTkFrame(brand, width=34, height=34, fg_color=GOLD_BG, border_color=GOLD, border_width=1, corner_radius=8)
         mark.pack(side="left")
         mark.pack_propagate(False)
-        ctk.CTkLabel(mark, text="◈", text_color=GOLD, font=ctk.CTkFont(size=20, weight="bold")).place(relx=0.5, rely=0.5, anchor="center")
+        disk_mark = tk.Canvas(mark, width=28, height=28, bg=GOLD_BG, highlightthickness=0)
+        disk_mark.place(relx=0.5, rely=0.5, anchor="center")
+        # CPU chip mark: processor body, inner circuit, and connector pins.
+        disk_mark.create_rectangle(7, 7, 21, 21, fill="#171B22", outline=GOLD, width=2)
+        disk_mark.create_rectangle(11, 11, 17, 17, fill=GOLD, outline=GOLD)
+        for x in (9, 19):
+            disk_mark.create_line(x, 3, x, 7, fill=GOLD, width=2)
+            disk_mark.create_line(x, 21, x, 25, fill=GOLD, width=2)
+        for y in (9, 19):
+            disk_mark.create_line(3, y, 7, y, fill=GOLD, width=2)
+            disk_mark.create_line(21, y, 25, y, fill=GOLD, width=2)
 
         brand_text = ctk.CTkFrame(brand, fg_color="transparent")
         brand_text.pack(side="left", padx=10)
@@ -343,7 +352,6 @@ class DiskDoctorApp(ctk.CTk):
             "dashboard": "Understand your disk. Find wasted space. Take control.",
             "analyzer": "Explore storage breakdown across file extensions and proportional spaces.",
             "large": "Identify and sort large files consuming the most disk space.",
-            "duplicates": "Find redundant bit-for-bit file duplicates verified with SHA-256.",
             "cleanup": "Safely clean user temporary files and send them to the Recycle Bin.",
             "insights": "Automated observations and storage recommendations from scan data.",
             "history": "Historical snapshots, trend analysis, and delta comparisons.",
@@ -1167,6 +1175,7 @@ class DiskDoctorApp(ctk.CTk):
             head.pack(fill="x", padx=12, pady=(0, 4))
             label(head, "RANK", 8, MUTED, "bold").pack(side="left", padx=(8, 6))
             label(head, "FILE NAME", 8, MUTED, "bold").pack(side="left", padx=6)
+            label(head, "ACTION", 8, MUTED, "bold").pack(side="right", padx=(6, 12))
             label(head, "SIZE", 8, MUTED, "bold").pack(side="right", padx=(6, 12))
 
             for idx, f in enumerate(node.largest_files[:5], 1):
@@ -1176,6 +1185,18 @@ class DiskDoctorApp(ctk.CTk):
                 Badge(row, f.extension.upper()[:5]).pack(side="left", padx=(0, 6))
                 f_name = f.name if len(f.name) < 26 else f.name[:14] + "…" + f.name[-10:]
                 label(row, f_name, 10, TEXT).pack(side="left")
+                button(
+                    row,
+                    "Recycle",
+                    lambda record=f: self.confirm_delete(
+                        [record],
+                        "Send file to Recycle Bin",
+                        allowed_roots=[self.target.get()],
+                    ),
+                    False,
+                    72,
+                    24,
+                ).pack(side="right", padx=(6, 10))
                 label(row, format_bytes(f.size), 10, BRIGHT_GOLD, "bold").pack(side="right", padx=(6, 10))
         else:
             label(self.analyzer_details_frame, "No files found in this folder.", 10, MUTED).pack(anchor="w", padx=14, pady=6)
