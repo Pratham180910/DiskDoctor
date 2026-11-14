@@ -4,7 +4,7 @@
 ![CustomTkinter](https://img.shields.io/badge/GUI-CustomTkinter-gold?style=flat)
 ![SQLite](https://img.shields.io/badge/Database-SQLite-003B57?style=flat&logo=sqlite&logoColor=white)
 ![Platform](https://img.shields.io/badge/Platform-Windows-0078D6?style=flat&logo=windows&logoColor=white)
-![License](https://img.shields.io/badge/License-MIT-green?style=flat)
+
 
 A standalone Windows desktop utility for analysing disk usage, detecting duplicate files, cleaning temporary files safely, and tracking storage changes over time — all without a browser or server.
 
